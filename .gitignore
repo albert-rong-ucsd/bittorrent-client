@@ -2,3 +2,5 @@ obj
 .deps
 main
 testing
+compile_commands.json
+.cache
