@@ -321,3 +321,49 @@ be_node * load_be_node(char * torf){
 
   return node;
 }
+
+struct bytestr *get_infoval(char *torf) {
+	char *torf_d;
+  	long long torf_s;
+  	torf_d = _read_file(torf,&torf_s);
+
+	unsigned int c_idx;
+	for (c_idx = 0; c_idx < torf_s; c_idx++) {
+		if (strncmp(torf_d + c_idx, "info", 4) == 0) {
+			break;
+		}
+	}
+
+	c_idx += 7; // TODO: pretty garbage, fix later
+	size_t info_s = torf_s - c_idx;
+
+	// fwrite(torf_d + c_idx, 1, info_s, stdout);
+	// printf("\n");
+	// printf("\nfound: [%s]\n", torf_d + c_idx);
+	// printf("\nfsize: %lld, c_idx: %d\n", torf_s, c_idx);
+
+	struct bytestr *found = malloc(sizeof(struct bytestr));
+	found->len  = info_s;
+	found->ptr = malloc(info_s);
+	memcpy(found->ptr, torf_d + c_idx, info_s);
+	free(torf_d);
+	return found;
+}
+
+struct be_node *be_dict_lookup(struct be_node *node, char *key) {
+	for (size_t i = 0; node->val.d[i].val; i++) {
+		struct be_dict *curr = &node->val.d[i];
+		char *curr_key = curr->key;
+
+		if (strcmp(curr_key, key) == 0) {
+			return curr->val;
+		}
+	}
+
+	return NULL;
+}
+
+long long *be_dict_lookup_num(struct be_node *node, char *key) {
+	struct be_node *val = be_dict_lookup(node, key);
+	return (val == NULL || val->type != BE_INT) ? NULL : &val->val.i;
+}

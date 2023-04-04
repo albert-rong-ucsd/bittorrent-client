@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic
-LIBS = 
+CFLAGS = -Wall -Wextra -pedantic -g
+LIBS = libcrypto libcurl
 SRCS = $(wildcard src/*.c)
 DEPS = $(SRCS:src/%.c=.deps/%.d)
 OBJS = $(SRCS:src/%.c=obj/%.o)

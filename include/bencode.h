@@ -22,6 +22,7 @@
 #ifndef _BENCODE_H
 #define _BENCODE_H
 
+#include "byte_str.h"
 
 /*enumerate for the different types of ben_node*/
 typedef enum {
@@ -65,4 +66,9 @@ void be_free(be_node *node);
 void be_dump(be_node *node);
 
 be_node * load_be_node(char * torrent_file);
+struct bytestr *get_infoval(char *torrent_file);
+
+// dict lookup methods
+struct be_node *be_dict_lookup(struct be_node *node, char *key);
+long long *be_dict_lookup_num(struct be_node *node, char *key);
 #endif
