@@ -23,8 +23,17 @@ struct dict {
 };
 
 struct dict *dict_init();
-int dict_add(struct dict *dict, char *key, unsigned char *val, int val_len);
+int dict_add(struct dict *dict, char *key, void *val, int val_len);
 int dict_remove(struct dict *dict, char *key);
 void *dict_get(struct dict *dict, char *key);
+
+#define FOREACH_DICT_ELEM(_elem, _dict) \
+	unsigned int macro_idx = 0; \
+	for (struct dict_elem *e = _dict->elems[macro_idx]; \
+			macro_idx < _dict->cap; \
+			e = _dict->elems[++macro_idx]) \
+		for (struct dict_elem *_elem = e, *next = (e) ? e->next : NULL; \
+				_elem; \
+				_elem = next, next = (next) ? next->next : NULL)
 
 #endif

@@ -29,7 +29,8 @@ struct ben_node {
 	};
 };
 
-struct ben_node *bencode_decode(char *buf, char **end);
+struct ben_node *bencode_decode_str(char *buf, char **end);
+struct ben_node *bencode_decode_file(char *filename);
 void bencode_print(struct ben_node *node);
 
 #endif

@@ -1,12 +1,45 @@
 #include "b_bencode.h"
 
+#include <sys/stat.h>
+
 int get_bentype(char c);
+struct ben_node *bencode_decode_str(char *buf, char **end);
 struct ben_node *decode_int(char *buf, char **end);
 struct ben_node *decode_str(char *buf, char **end);
 struct ben_node *decode_list(char *buf, char **end);
 struct ben_node *decode_dict(char *buf, char **end);
 
-struct ben_node *bencode_decode(char *buf, char **end) {
+char *read_file(char *file, long long *len) {
+	struct stat s;
+	if (stat(file, &s)) {
+		return NULL;
+	}
+	*len = s.st_size;
+
+	FILE *f = fopen(file, "r");
+	if (!f) {
+		return NULL;
+	}
+
+	char *read = malloc(*len);
+	fread(read, 1, *len, f);
+	fclose(f);
+	return read;
+}
+
+struct ben_node *bencode_decode_file(char *filename) {
+	char *tor_str;
+	long long tor_size;
+	tor_str = read_file(filename, &tor_size);
+
+	char *end;
+	struct ben_node *node = bencode_decode_str(tor_str, &end);
+	// TODO: maybe ensure end - tor_str ~ tor_size?
+	free(tor_str);
+	return node;
+}
+
+struct ben_node *bencode_decode_str(char *buf, char **end) {
 	switch (get_bentype(*buf)) {
 		case INT:
 			return decode_int(buf, end);
@@ -90,10 +123,10 @@ struct ben_node *decode_list(char *buf, char **end) {
 	assert(*buf == 'l');
 	struct list *l = list_init(sizeof(struct ben_node));
 
-	char *curr = buf;
+	char *curr = buf + 1;
 	while (*curr != 'e') {
 		char *curr_end;
-		list_add(l, bencode_decode(curr, &curr_end));
+		list_add(l, bencode_decode_str(curr, &curr_end));
 		curr = curr_end;
 	}
 	
@@ -112,12 +145,12 @@ struct ben_node *decode_dict(char *buf, char **end) {
 	assert(*buf == 'd');
 	struct dict *d = dict_init();
 
-	char *curr = buf;
+	char *curr = buf + 1;
 	while (*curr != 'e') {
 		char *val_buf, *next_curr;
 		struct ben_node *key_node = decode_str(curr, &val_buf);
-		struct ben_node *val_node = bencode_decode(val_buf, &next_curr);
-		dict_add(d, key_node->s->ptr, (unsigned char *) val_node, sizeof(struct ben_node *));
+		struct ben_node *val_node = bencode_decode_str(val_buf, &next_curr);
+		dict_add(d, key_node->s->ptr, (unsigned char *) val_node, sizeof(struct ben_node));
 		curr = next_curr;
 
 		free(key_node->s);
@@ -151,18 +184,25 @@ void h_bencode_print(struct ben_node *node, unsigned int depth) {
 			break;
 		case LIST:
 			printf("list = [\n");
-			// TODO: iterate depth + 1
+			FOREACH_LIST_ELEM(elem, idx, node->l) {
+				h_bencode_print(elem, depth + 1);
+			}
 			h_bencode_pindent(depth);
-			printf("]\n");
+			printf("(size: %lu) ]\n", node->l->size);
 			break;
 		case DICT:
 			printf("dict = {\n");
-			// TODO: iterate depth + 1
+			FOREACH_DICT_ELEM(elem, node->d) {
+				h_bencode_pindent(depth+1);
+				printf("key: %s\n", elem->key);
+				h_bencode_print((struct ben_node *)elem->val, depth + 1);
+				printf("\n");
+			}
 			h_bencode_pindent(depth);
-			printf("dict = {\n");
+			printf("(size: %lu) }\n", node->d->size);
 			break;
 		default:
-			printf("bruh this aint a node, see ya\n");
+			printf("ERROR: invalid node encountered\n");
 			exit(1);
 			break;
 	}

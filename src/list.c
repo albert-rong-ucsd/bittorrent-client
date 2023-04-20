@@ -1,4 +1,6 @@
 #include "list.h"
+#include <stdio.h>
+
 
 struct list *list_init(size_t e_size) {
 	struct list *l = malloc(sizeof(struct list));
@@ -6,7 +8,7 @@ struct list *list_init(size_t e_size) {
 		l->e_size = e_size;
 		l->cap = DEFAULT_CAP;
 		l->size = 0;
-		l->elems = calloc(l->cap, sizeof(void *));
+		l->elems = calloc(l->cap, e_size);
 		if (!l->elems) {
 			free(l);
 			l = NULL;
@@ -14,6 +16,11 @@ struct list *list_init(size_t e_size) {
 	}
 
 	return l;
+}
+
+void list_free(struct list *list) {
+	free(list->elems);
+	free(list);
 }
 
 int list_add(struct list *list, void *elem) {
@@ -29,26 +36,28 @@ int list_add(struct list *list, void *elem) {
 		list->cap = new_cap;
 	}
 
-	list->elems[list->size++] = elem;
-
+	memcpy((char *) list->elems + (list->size * list->e_size), elem, list->e_size);
+	list->size++;
 	return 0;
 }
 
+// returns ptr to prev val, must be freed?
 void *list_remove(struct list *list, size_t idx) {
 	if (idx >= list->size) {
 		return NULL;
 	}
 
-	void *ret = list->elems[idx];
+	void *removed = malloc(list->e_size);
+	memcpy(removed, (char *) list->elems + (idx * list->e_size), list->e_size);
 	
 	for (size_t i = idx; i < list->size - 1; i++) {
-		list->elems[i] = list->elems[i + 1];
+		memcpy((char *) list->elems + (i * list->e_size),
+				(char *) list->elems + ((i + 1) * list->e_size),
+				list->e_size);
 	}
 
-	list->elems[list->size - 1] = NULL;
 	list->size--;
-
-	return ret;
+	return removed;
 }
 
 void *list_removelast(struct list *list) {
@@ -60,5 +69,5 @@ void *list_get(struct list *list, size_t idx) {
 		return NULL;
 	}
 
-	return list->elems[idx];
+	return (char *) list->elems + (idx * list->e_size);
 }

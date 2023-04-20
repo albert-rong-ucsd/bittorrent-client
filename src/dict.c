@@ -17,6 +17,16 @@ struct dict *dict_init() {
 	return d;
 }
 
+void dict_free(struct dict *dict) {
+	FOREACH_DICT_ELEM(elem, dict) {
+		free(elem->key);
+		free(elem);
+	}
+
+	free(dict->elems);
+	free(dict);
+}
+
 struct dict_elem *dict_elem_init(char *key, unsigned char *val, size_t val_len) {
 	struct dict_elem *elem = malloc(sizeof(struct dict_elem) + val_len);
 	size_t key_size = strlen(key) + 1;
@@ -63,7 +73,7 @@ int ensure_load_factor(struct dict *dict) {
 	return 1;
 }
 
-int dict_add(struct dict *dict, char *key, unsigned char *val, int val_len) {
+int dict_add(struct dict *dict, char *key, void *val, int val_len) {
 	uint32_t add_idx = hash(key) % dict->cap;
 
 	struct dict_elem *prev = NULL;
