@@ -1,6 +1,7 @@
 #include "b_bencode.h"
 
 #include <sys/stat.h>
+#include <openssl/sha.h>
 
 int get_bentype(char c);
 struct ben_node *bencode_decode_str(char *buf, char **end);
@@ -153,6 +154,11 @@ struct ben_node *decode_dict(char *buf, char **end) {
 		dict_add(d, key_node->s->ptr, (unsigned char *) val_node, sizeof(struct ben_node));
 		curr = next_curr;
 
+		if (key_node->s->len == 4 && !(strncmp(key_node->s->ptr, "info", 4))) {
+			unsigned long infoval_len = next_curr - val_buf;
+			SHA1((unsigned char *) val_buf, infoval_len, (unsigned char *) val_node->sha_hash);
+		}
+
 		free(key_node->s);
 		free(key_node);
 	}
@@ -195,6 +201,11 @@ void h_bencode_print(struct ben_node *node, unsigned int depth) {
 			FOREACH_DICT_ELEM(elem, node->d) {
 				h_bencode_pindent(depth+1);
 				printf("key: %s\n", elem->key);
+				if (!strncmp(elem->key, "info", 4)) {
+					printf(", ");
+					fwrite(node->sha_hash, 1, 20, stdout);
+					printf("\n");
+				}
 				h_bencode_print((struct ben_node *)elem->val, depth + 1);
 				printf("\n");
 			}

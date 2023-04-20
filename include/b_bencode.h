@@ -12,6 +12,8 @@
 #include "list.h"
 #include "dict.h"
 
+#define SHA_HASH_LEN 20
+
 enum B_TYPE {
 	INT,
 	STR,
@@ -27,6 +29,7 @@ struct ben_node {
 		struct list *l;
 		struct dict *d;
 	};
+	char sha_hash[SHA_HASH_LEN];
 };
 
 struct ben_node *bencode_decode_str(char *buf, char **end);
