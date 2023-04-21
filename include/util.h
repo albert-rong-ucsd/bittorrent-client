@@ -17,7 +17,7 @@ struct sha_hash {
 
 struct bt_info {
 	struct bt_fileinfo *f_info;  // array of ptrs to info on each file in torrent
-	uint8_t *info_hash;          // 20-byte sha-1 hash of the bencoded info
+	char info_hash[20];          // 20-byte sha-1 hash of the bencoded info
 	char *name;                  // name of torrent (filename if single file)
 	int num_files;               // number of files in torrent
 	int piece_length;            // number of bytes in each piece

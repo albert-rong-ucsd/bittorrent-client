@@ -151,13 +151,14 @@ struct ben_node *decode_dict(char *buf, char **end) {
 		char *val_buf, *next_curr;
 		struct ben_node *key_node = decode_str(curr, &val_buf);
 		struct ben_node *val_node = bencode_decode_str(val_buf, &next_curr);
-		dict_add(d, key_node->s->ptr, (unsigned char *) val_node, sizeof(struct ben_node));
-		curr = next_curr;
 
 		if (key_node->s->len == 4 && !(strncmp(key_node->s->ptr, "info", 4))) {
 			unsigned long infoval_len = next_curr - val_buf;
 			SHA1((unsigned char *) val_buf, infoval_len, (unsigned char *) val_node->sha_hash);
 		}
+
+		dict_add(d, key_node->s->ptr, (unsigned char *) val_node, sizeof(struct ben_node));
+		curr = next_curr;
 
 		free(key_node->s);
 		free(key_node);

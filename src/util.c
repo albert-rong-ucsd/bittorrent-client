@@ -6,97 +6,88 @@
 #include <openssl/sha.h>
 
 #include "util.h"
-#include "bencode.h"
+#include "b_bencode.h"
 #include "byte_str.h"
 #include "tracker_announce.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-void copy_str(char **dest, struct be_node *src_node) {
-	if (src_node == NULL) {
+void copy_str(char **dest, struct ben_node *src_node) {
+	if (src_node == NULL || src_node->type != STR) {
 		*dest = NULL;
 		return;
 	}
 
-	char *to_copy = src_node->val.s;
-	size_t len = be_str_len(src_node);
+	char *to_copy = src_node->s->ptr;
+	size_t len = src_node->s->len;
 	*dest = malloc(len + 1);
 	memcpy(*dest, to_copy, len);
 	(*dest)[len] = '\0';
 }
 
-uint8_t *calculate_infohash(char *filepath) {
-	struct bytestr *info = get_infoval(filepath);
-
-	uint8_t *hash = malloc(20);
-
-	SHA1((unsigned char *) info->ptr, info->len, hash);
-
-	free(info->ptr);
-	free(info);
-	
-	return hash;
-}
-
 void populate_torrent_metainfo(struct bt_metainfo *metainfo, char *filepath) {
-	struct be_node *node = load_be_node(filepath);
+	struct ben_node *node = bencode_decode_file(filepath);
 
-	be_dump(node);
-
-	if (node->type != BE_DICT) { // TODO: return error code or something?
+	if (node->type != DICT) { // TODO: return error code or something?, prob just verify torrent file with function, expect everything else well parsed
 		return;
 	}
+	struct dict *root_dict = node->d;
 
 	// fill in metainfo
-	copy_str(&metainfo->announce, be_dict_lookup(node, "announce"));
-	copy_str(&metainfo->comment, be_dict_lookup(node, "comment"));
-	copy_str(&metainfo->creator, be_dict_lookup(node, "created by"));
+	copy_str(&metainfo->announce, dict_get(root_dict, "announce"));
+	copy_str(&metainfo->comment, dict_get(root_dict, "comment"));
+	copy_str(&metainfo->creator, dict_get(root_dict, "created by"));
 	metainfo->created = malloc(sizeof(time_t));
-	*metainfo->created = *be_dict_lookup_num(node, "creation date"); // TODO: BRUH THIS WILL NPTREXCEPT
+	*metainfo->created = *(int64_t *) dict_get(root_dict, "creation date"); // TODO: BRUH THIS WILL NPTREXCEPT
 
 	// fill in info
-	struct be_node *info_dict = be_dict_lookup(node, "info");
+	struct ben_node *info_node = dict_get(root_dict, "info");
 	metainfo->info = malloc(sizeof(struct bt_info));
 	struct bt_info *info = metainfo->info;
 
-	copy_str(&info->name, be_dict_lookup(info_dict, "name"));
-	info->piece_length = *be_dict_lookup_num(info_dict, "piece length");
+	struct dict *info_dict = info_node->d;
+	copy_str(&info->name, dict_get(info_dict, "name"));
+	info->piece_length = *(int64_t *) dict_get(info_dict, "piece length");
 
-	struct be_node *pieces_hash_node = be_dict_lookup(info_dict, "pieces");
-	long long pieces_len = be_str_len(pieces_hash_node);
+	struct bytestr *pieces_str = ((struct ben_node *) dict_get(info_dict, "pieces"))->s;
+	long long pieces_len = pieces_str->len;
 	info->sha_hashes = malloc(pieces_len);
-	memcpy(info->sha_hashes, pieces_hash_node->val.s, pieces_len);
+	memcpy(info->sha_hashes, pieces_str->ptr, pieces_len);
 
 	info->num_pieces = pieces_len / 20;
-	info->info_hash = calculate_infohash(filepath);
+	memcpy(info->info_hash, info_node->sha_hash, 20);
 
 	// fill in fileinfo
-	long long *file_len = be_dict_lookup_num(info_dict, "length");
+	struct ben_node *file_len = dict_get(info_dict, "length");
 	if (file_len != NULL) { // single file mode
 		info->num_files = 1;
 
 		info->f_info = malloc(sizeof(struct bt_fileinfo));
 		info->f_info->name = info->name;
-		info->f_info->length = *file_len;
+		info->f_info->length = file_len->i;
 		info->f_info->path = malloc(2);
 		memcpy(info->f_info->path, ".", 2);
 	}
 	else { // multifile mode
-		struct be_node *files_node = be_dict_lookup(info_dict, "files");
+		struct ben_node *files_node = dict_get(info_dict, "files");
+		struct dict *files_dict = files_node->d;
 
-		size_t i;
-		for (i = 0; files_node->val.l[i]; i++) { }
-		info->num_files = i;
+		info->num_files = files_dict->size;
 		
 		info->f_info = malloc(sizeof(struct bt_fileinfo) * info->num_files);
-		for (i = 0; files_node->val.l[i]; i++) {
-			struct be_node *file_dict = files_node->val.l[i];
+
+		unsigned int i = 0;
+		FOREACH_DICT_ELEM(elem, files_dict) {
+			struct ben_node *file_node = (void *) elem->val;
+			struct dict *file_dict = file_node->d;
 			struct bt_fileinfo *curr_file = &info->f_info[i];
 
-			copy_str(&curr_file->name, be_dict_lookup(file_dict, "name"));
-			curr_file->length = *be_dict_lookup_num(file_dict, "length");
+			copy_str(&curr_file->name, dict_get(file_dict, "name"));
+			curr_file->length = ((struct ben_node *) dict_get(file_dict, "length"))->i;
 			// copy_str(&curr_file->path, be_dict_lookup(file_dict, "path")); TODO: FIX LINE NOT A STRING
+
+			i++;
 		}
 	}
 }
@@ -204,8 +195,7 @@ void send_tracker_request(struct bt_instance *instance) {
 	struct tracker_req *req = &tr;
 
 	req->announce_url = instance->t_metainfo->announce;
-	// req->info_hash = (uint8_t *) instance->t_metainfo->info->info_hash;
-	req->info_hash = (uint8_t *) "\x99\xc8\x2b\xb7\x35\x05\xa3\xc0\xb4\x53\xf9\xfa\x0e\x88\x1d\x6e\x5a\x32\xa0\xc1"; // TODO: CHEATING !!!!!!!!!!!
+	req->info_hash = (uint8_t *) instance->t_metainfo->info->info_hash;
 	req->pid = (uint8_t *) instance->client_id;
 	req->port = 6885; // TODO: mmmmmm fix
 	req->uploaded = 0;
